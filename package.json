@@ -1,0 +1,18 @@
+{
+  "name": "weasley-travel-tracker",
+  "version": "1.0.0",
+  "description": "A travel tracker webapp with a Weasley-style clock showing where I'm traveling, and letting people sign up to join.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node seed.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
