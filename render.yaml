@@ -1,17 +1,17 @@
-# Render Blueprint: one-click configuration for a web service + persistent disk.
+# Render Blueprint: web service on the free tier, backed by a Postgres database
+# (e.g. a free Neon database) via the DATABASE_URL environment variable.
+# The free tier does not support persistent disks, so data lives in Postgres.
 # Docs: https://render.com/docs/blueprint-spec
 services:
   - type: web
     name: weasley-travel-tracker
     runtime: node
-    plan: free # bump to "starter" or higher to avoid cold starts
+    plan: free # free tier: sleeps when idle, no persistent disk (data is in Postgres)
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
       - key: ADMIN_PASSWORD
         sync: false # set this yourself in the Render dashboard (don't commit secrets)
-    disk:
-      name: weasley-data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+      - key: DATABASE_URL
+        sync: false # paste your Neon (or other) Postgres connection string here

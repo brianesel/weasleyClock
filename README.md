@@ -59,17 +59,32 @@ action. (Skip it if you'd rather start empty.)
 
 ## How data is stored
 
-Trips and sign-ups are kept in a single JSON file at `data/trips.json` — no database
-server or native build tools required, so it runs anywhere Node 18+ does. The file is
-written atomically. For production you'd typically swap this for a real database, but
-the file store keeps the app dependency-light and easy to run.
+The app has **two interchangeable storage backends**, selected automatically at
+startup:
+
+- **Postgres** — used when the `DATABASE_URL` environment variable is set (e.g. a
+  free [Neon](https://neon.tech) database on Render). Tables are created
+  automatically on first run.
+- **JSON file** (`data/trips.json`) — used when `DATABASE_URL` is *not* set.
+  Zero-config, great for local development. Writes are atomic.
+
+Both expose the same API, so the rest of the app doesn't care which is active. To
+run locally against Postgres, set `DATABASE_URL`:
+
+```bash
+DATABASE_URL="postgres://user:pass@host/db" npm start
+# For a local Postgres without TLS, also set: DATABASE_SSL=false
+```
+
+See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for hosting on Render with a free Neon
+database.
 
 ## Project layout
 
 ```
-server.js        Express server + REST API
-db.js            JSON-file data store (trips, signups)
-seed.js          Optional sample-data seeder
+server.js        Express server + REST API (async handlers)
+db.js            Data store: Postgres or JSON-file backend (trips, signups)
+seed.js          Optional sample-data seeder (works with either backend)
 public/
   index.html     Home page (clock + trip list + signup)
   app.js         Clock rendering + trip/signup logic

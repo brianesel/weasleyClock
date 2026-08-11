@@ -3,8 +3,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   STATUSES,
+  usingPostgres,
+  init,
   listTrips,
-  getTrip,
   createTrip,
   updateTrip,
   deleteTrip,
@@ -23,6 +24,14 @@ app.use(express.json());
 app.use(express.static(join(__dirname, 'public')));
 
 // --- Helpers ----------------------------------------------------------------
+
+// Wrap an async route handler so rejected promises turn into a 500 instead of
+// crashing the process.
+const wrap = (fn) => (req, res) =>
+  Promise.resolve(fn(req, res)).catch((e) => {
+    console.error(e);
+    if (!res.headersSent) res.status(500).json({ error: 'server_error' });
+  });
 
 // Compute the current status given the trips and a reference date (YYYY-MM-DD).
 // Returns the status of the trip that "contains" today; otherwise 'Home'.
@@ -65,45 +74,49 @@ function requireAdmin(req, res, next) {
 
 // Health check for hosting platforms (Render, Fly, etc.). Returns 200 when the
 // server is up and the data store is readable.
-app.get('/healthz', (_req, res) => {
-  try {
-    const trips = listTrips();
-    res.json({ status: 'ok', trips: trips.length });
-  } catch (e) {
-    res.status(500).json({ status: 'error' });
-  }
-});
+app.get(
+  '/healthz',
+  wrap(async (_req, res) => {
+    const trips = await listTrips();
+    res.json({ status: 'ok', backend: usingPostgres ? 'postgres' : 'file', trips: trips.length });
+  }),
+);
 
 app.get('/api/statuses', (_req, res) => {
   res.json({ statuses: STATUSES });
 });
 
-app.get('/api/trips', (_req, res) => {
-  const trips = listTrips();
-  res.json({ trips: trips.map(publicTrip) });
-});
+app.get(
+  '/api/trips',
+  wrap(async (_req, res) => {
+    const trips = await listTrips();
+    res.json({ trips: trips.map(publicTrip) });
+  }),
+);
 
-app.get('/api/status', (_req, res) => {
-  const trips = listTrips();
-  const today = todayISO();
-  const { status, trip } = computeCurrentStatus(trips, today);
-  res.json({
-    today,
-    status,
-    trip: trip ? publicTrip(trip) : null,
-  });
-});
+app.get(
+  '/api/status',
+  wrap(async (_req, res) => {
+    const trips = await listTrips();
+    const today = todayISO();
+    const { status, trip } = computeCurrentStatus(trips, today);
+    res.json({ today, status, trip: trip ? publicTrip(trip) : null });
+  }),
+);
 
-app.post('/api/trips/:id/signup', (req, res) => {
-  const { name, email, note } = req.body || {};
-  if (!name || !String(name).trim()) {
-    return res.status(400).json({ error: 'name_required' });
-  }
-  const result = addSignup(req.params.id, { name, email, note });
-  if (result.error === 'not_found') return res.status(404).json({ error: 'not_found' });
-  if (result.error === 'full') return res.status(409).json({ error: 'full' });
-  res.status(201).json({ ok: true, trip: publicTrip(result.trip) });
-});
+app.post(
+  '/api/trips/:id/signup',
+  wrap(async (req, res) => {
+    const { name, email, note } = req.body || {};
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'name_required' });
+    }
+    const result = await addSignup(req.params.id, { name, email, note });
+    if (result.error === 'not_found') return res.status(404).json({ error: 'not_found' });
+    if (result.error === 'full') return res.status(409).json({ error: 'full' });
+    res.status(201).json({ ok: true, trip: publicTrip(result.trip) });
+  }),
+);
 
 // --- Admin auth check -------------------------------------------------------
 
@@ -116,46 +129,76 @@ app.post('/api/admin/login', (req, res) => {
 // --- Admin API (password protected) ----------------------------------------
 
 // Admin view includes full signup details (with emails).
-app.get('/api/admin/trips', requireAdmin, (_req, res) => {
-  res.json({ trips: listTrips() });
-});
+app.get(
+  '/api/admin/trips',
+  requireAdmin,
+  wrap(async (_req, res) => {
+    res.json({ trips: await listTrips() });
+  }),
+);
 
-app.post('/api/admin/trips', requireAdmin, (req, res) => {
-  const { destination, status, startDate, endDate } = req.body || {};
-  if (!destination || !startDate || !endDate) {
-    return res.status(400).json({ error: 'missing_fields' });
-  }
-  if (startDate > endDate) {
-    return res.status(400).json({ error: 'bad_dates' });
-  }
-  const trip = createTrip(req.body);
-  res.status(201).json({ trip });
-});
+app.post(
+  '/api/admin/trips',
+  requireAdmin,
+  wrap(async (req, res) => {
+    const { destination, status, startDate, endDate } = req.body || {};
+    if (!destination || !startDate || !endDate) {
+      return res.status(400).json({ error: 'missing_fields' });
+    }
+    if (startDate > endDate) {
+      return res.status(400).json({ error: 'bad_dates' });
+    }
+    const trip = await createTrip(req.body);
+    res.status(201).json({ trip });
+  }),
+);
 
-app.put('/api/admin/trips/:id', requireAdmin, (req, res) => {
-  const { startDate, endDate } = req.body || {};
-  if (startDate && endDate && startDate > endDate) {
-    return res.status(400).json({ error: 'bad_dates' });
-  }
-  const trip = updateTrip(req.params.id, req.body || {});
-  if (!trip) return res.status(404).json({ error: 'not_found' });
-  res.json({ trip });
-});
+app.put(
+  '/api/admin/trips/:id',
+  requireAdmin,
+  wrap(async (req, res) => {
+    const { startDate, endDate } = req.body || {};
+    if (startDate && endDate && startDate > endDate) {
+      return res.status(400).json({ error: 'bad_dates' });
+    }
+    const trip = await updateTrip(req.params.id, req.body || {});
+    if (!trip) return res.status(404).json({ error: 'not_found' });
+    res.json({ trip });
+  }),
+);
 
-app.delete('/api/admin/trips/:id', requireAdmin, (req, res) => {
-  const ok = deleteTrip(req.params.id);
-  if (!ok) return res.status(404).json({ error: 'not_found' });
-  res.json({ ok: true });
-});
+app.delete(
+  '/api/admin/trips/:id',
+  requireAdmin,
+  wrap(async (req, res) => {
+    const ok = await deleteTrip(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true });
+  }),
+);
 
-app.delete('/api/admin/trips/:tripId/signups/:signupId', requireAdmin, (req, res) => {
-  const ok = removeSignup(req.params.tripId, req.params.signupId);
-  if (!ok) return res.status(404).json({ error: 'not_found' });
-  res.json({ ok: true });
-});
+app.delete(
+  '/api/admin/trips/:tripId/signups/:signupId',
+  requireAdmin,
+  wrap(async (req, res) => {
+    const ok = await removeSignup(req.params.tripId, req.params.signupId);
+    if (!ok) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true });
+  }),
+);
 
-app.listen(PORT, () => {
-  console.log(`\n  🧭  Weasley Travel Tracker running at http://localhost:${PORT}`);
-  console.log(`      Admin page:  http://localhost:${PORT}/admin.html`);
-  console.log(`      Admin password: "${ADMIN_PASSWORD}" (set ADMIN_PASSWORD env var to change)\n`);
-});
+// --- Startup ----------------------------------------------------------------
+
+init()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n  🧭  Weasley Travel Tracker running at http://localhost:${PORT}`);
+      console.log(`      Storage: ${usingPostgres ? 'Postgres (DATABASE_URL)' : 'JSON file'}`);
+      console.log(`      Admin page:  http://localhost:${PORT}/admin.html`);
+      console.log(`      Admin password: "${ADMIN_PASSWORD}" (set ADMIN_PASSWORD env var to change)\n`);
+    });
+  })
+  .catch((e) => {
+    console.error('Failed to initialize the data store:', e);
+    process.exit(1);
+  });

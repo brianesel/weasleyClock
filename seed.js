@@ -1,8 +1,9 @@
 // Optional: seed a few sample trips so the app has something to show.
-// Run with `npm run seed`. Safe to run repeatedly (it replaces sample data
-// only if the store is empty).
+// Run with `npm run seed`. Works against whichever backend is configured
+// (Postgres if DATABASE_URL is set, otherwise the local JSON file).
+// Safe to run repeatedly: it only seeds when the store is empty.
 
-import { listTrips, createTrip } from './db.js';
+import { init, listTrips, createTrip } from './db.js';
 
 const samples = [
   {
@@ -39,10 +40,15 @@ const samples = [
   },
 ];
 
-if (listTrips().length > 0) {
-  console.log('Store already has trips — not seeding. Delete data/trips.json to reseed.');
+await init();
+
+if ((await listTrips()).length > 0) {
+  console.log('Store already has trips — not seeding. Clear the store to reseed.');
   process.exit(0);
 }
 
-samples.forEach((s) => createTrip(s));
-console.log(`Seeded ${samples.length} sample trips into data/trips.json.`);
+for (const s of samples) {
+  await createTrip(s);
+}
+console.log(`Seeded ${samples.length} sample trips.`);
+process.exit(0);
