@@ -195,6 +195,7 @@ in `server.js` or the front-end has to change.
 - [ ] `ADMIN_PASSWORD` set to something strong (not `weasley`).
 - [ ] Data directory is on a **persistent** disk/volume.
 - [ ] Site loads over **HTTPS**.
+- [ ] `GET /healthz` returns `{"status":"ok"}` (Render uses this as its health check).
 - [ ] You can log in at `/admin.html` and add a trip.
 - [ ] The new trip shows on the home page and the clock behaves.
 - [ ] A backup plan exists for `data/trips.json` (or you've moved to a DB).

@@ -63,6 +63,17 @@ function requireAdmin(req, res, next) {
 
 // --- Public API -------------------------------------------------------------
 
+// Health check for hosting platforms (Render, Fly, etc.). Returns 200 when the
+// server is up and the data store is readable.
+app.get('/healthz', (_req, res) => {
+  try {
+    const trips = listTrips();
+    res.json({ status: 'ok', trips: trips.length });
+  } catch (e) {
+    res.status(500).json({ status: 'error' });
+  }
+});
+
 app.get('/api/statuses', (_req, res) => {
   res.json({ statuses: STATUSES });
 });
