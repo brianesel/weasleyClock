@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Travel Tracker</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-mark">🧭</span>
+      <span class="brand-text">Weasley Travel Tracker</span>
+    </div>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/admin.html" class="active">Admin</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Login -->
+    <section id="loginView">
+      <div class="panel login-card">
+        <h2>Admin sign in</h2>
+        <p class="hint">Enter the admin password to manage trips.</p>
+        <form id="loginForm">
+          <label>Password
+            <input type="password" name="password" required autocomplete="current-password" />
+          </label>
+          <p class="form-error" id="loginError" hidden></p>
+          <button type="submit" class="btn btn-primary">Sign in</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="adminView" hidden>
+      <div class="admin-grid">
+        <div class="panel">
+          <h2 id="formTitle">Add a trip</h2>
+          <form id="tripForm">
+            <input type="hidden" name="id" />
+            <label>Destination <span class="req">*</span>
+              <input type="text" name="destination" required maxlength="120" placeholder="e.g. Kilimanjaro, Tanzania" />
+            </label>
+            <label>Clock status <span class="req">*</span>
+              <select name="status" id="statusSelect" required></select>
+            </label>
+            <div class="inline-fields">
+              <label>Start date <span class="req">*</span>
+                <input type="date" name="startDate" required />
+              </label>
+              <label>End date <span class="req">*</span>
+                <input type="date" name="endDate" required />
+              </label>
+            </div>
+            <label>Spots available (0 = unlimited)
+              <input type="number" name="capacity" min="0" max="999" value="0" />
+            </label>
+            <label>Notes
+              <textarea name="notes" rows="3" maxlength="500" placeholder="Trip details people should know…"></textarea>
+            </label>
+            <p class="form-error" id="tripError" hidden></p>
+            <p class="form-ok" id="tripOk" hidden></p>
+            <div class="admin-actions">
+              <button type="submit" class="btn btn-primary" id="saveBtn">Add trip</button>
+              <button type="button" class="btn" id="cancelEdit" hidden>Cancel edit</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="row" style="display:flex;justify-content:space-between;align-items:center;">
+            <h2 style="margin:0;">Trips</h2>
+            <button class="btn btn-sm" id="logoutBtn">Sign out</button>
+          </div>
+          <div id="adminTrips"><p class="hint">Loading…</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/admin.js"></script>
+</body>
+</html>
