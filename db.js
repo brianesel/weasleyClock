@@ -12,7 +12,9 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, 'data');
+// DATA_DIR lets a host point the store at a mounted persistent volume
+// (e.g. Fly's /data). Falls back to the local ./data folder for dev.
+const DATA_DIR = process.env.DATA_DIR || join(__dirname, 'data');
 const DATA_FILE = join(DATA_DIR, 'trips.json');
 
 function ensureStore() {
