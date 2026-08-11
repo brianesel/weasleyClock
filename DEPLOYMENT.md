@@ -15,7 +15,7 @@ This app is a plain **Node.js + Express** server that stores data in a JSON file
 
 | If you want…                                  | Use            | Notes |
 |-----------------------------------------------|----------------|-------|
-| **The easiest path that just works** ⭐        | **Render**     | Free/cheap web service + a persistent disk. Deploy from GitHub in minutes. |
+| **The easiest path that just works** ⭐        | **Render**     | Free web service + a free Neon Postgres database. Deploy from GitHub in minutes. |
 | Generous hobby tier, very fast setup          | **Railway**    | Add a Volume, point it at `/app/data`. Usage-based pricing. |
 | Global/edge, scale-to-zero, cheap             | **Fly.io**     | Attach a Volume; a little more CLI/config. |
 | Full control / cheapest at scale              | **A VPS** (Hetzner, DigitalOcean, Linode) | You manage the box; run under `pm2` or `systemd` behind Caddy/Nginx. |
@@ -34,38 +34,68 @@ if the trip list ever gets popular.
    unique value. Anyone with it can add/edit/delete trips.
 2. **Let the host pick the port.** The server already reads `process.env.PORT`,
    so you don't need to hardcode anything.
-3. **Persist the `data/` directory.** Mount a disk/volume there so
-   `data/trips.json` survives restarts and deploys.
+3. **Give it durable storage.** Either set `DATABASE_URL` to a Postgres database
+   (recommended on hosts without a persistent disk, like Render's free tier), or
+   mount a disk/volume at the `data/` directory so `data/trips.json` survives
+   restarts and deploys. The app uses Postgres automatically when `DATABASE_URL`
+   is present, and the JSON file otherwise.
 4. **Use HTTPS.** All the hosts below terminate TLS for you automatically. This
    matters because the admin password is sent with each admin request — over
    plain HTTP it would be exposed.
 
 ---
 
-## Option 1 — Render (recommended) ⭐
+## Option 1 — Render free tier + Neon Postgres (recommended) ⭐
 
-1. Push this repo to GitHub (already done on your branch).
-2. In the [Render dashboard](https://render.com), **New → Web Service**, and
-   connect the repo.
-3. Settings:
-   - **Runtime:** Node
-   - **Build command:** `npm install`
-   - **Start command:** `npm start`
-4. **Environment → Add Environment Variable:**
-   - `ADMIN_PASSWORD` = your strong password
-5. **Disks → Add Disk** (this is the important part):
-   - **Mount path:** `/opt/render/project/src/data`
-   - **Size:** 1 GB is plenty
-6. Create the service. Render builds, deploys, and gives you an
-   `https://<name>.onrender.com` URL.
+Render's **free** web service does **not** support a persistent disk, so on the
+free tier the app stores its data in **Postgres** instead of the JSON file. The
+easiest free Postgres is [Neon](https://neon.tech). The app switches to Postgres
+automatically whenever `DATABASE_URL` is set — no code changes needed.
 
-There's a `render.yaml` in this repo that captures steps 3–5 as
-Infrastructure-as-Code — with it, Render can configure the service and disk
-automatically ("Blueprint" deploy).
+### Step 1 — Create a free Neon database
 
-> Note: on Render's **free** tier the service sleeps after inactivity and cold-
-> starts on the next request (a few seconds). Your data on the mounted disk is
-> preserved across sleeps. Upgrade to a paid instance to avoid the cold start.
+1. Sign up at [neon.tech](https://neon.tech) and create a project (any region
+   near your users).
+2. From the project dashboard, copy the **connection string**. It looks like:
+   ```
+   postgres://<user>:<password>@<host>.neon.tech/<db>?sslmode=require
+   ```
+   Use the **pooled** connection string if Neon offers one — it's better suited
+   to a web service. Keep this secret; you'll paste it into Render next.
+
+### Step 2 — Deploy the web service on Render
+
+**Blueprint (recommended):**
+
+1. [dashboard.render.com](https://dashboard.render.com) → **New +** → **Blueprint**.
+2. Connect the `brianesel/weasleyClock` repo (make sure it tracks the **`main`**
+   branch). Render reads `render.yaml`.
+3. When prompted for the two `sync: false` env vars, enter:
+   - `ADMIN_PASSWORD` = a strong password (your admin login).
+   - `DATABASE_URL` = the Neon connection string from Step 1.
+4. **Apply.** Render builds and deploys; the app creates its tables on first boot.
+
+**Manual (alternative):**
+
+1. **New +** → **Web Service** → connect the repo.
+2. Runtime **Node**, Build command `npm install`, Start command `npm start`,
+   Health check path `/healthz`.
+3. **Environment →** add `ADMIN_PASSWORD` and `DATABASE_URL` (as above).
+4. **Create Web Service** — leave the plan on **Free**. Do **not** add a disk.
+
+You'll get an `https://<name>.onrender.com` URL. Visit `/healthz` — it should
+report `{"status":"ok","backend":"postgres"}`.
+
+> Notes on the free tier:
+> - The service **sleeps** after ~15 min idle and cold-starts (a few seconds) on
+>   the next request. Your data lives in Neon, so nothing is lost. Upgrade to the
+>   **Starter** instance (~$7/mo) to stay always-on.
+> - Neon's own free tier also **auto-suspends** an idle database and wakes it on
+>   the next query — the first request after a nap may be a touch slow.
+> - If you'd rather use a persistent disk with the JSON-file store instead of
+>   Postgres, bump the plan in `render.yaml` from `free` to `starter`, replace the
+>   `DATABASE_URL` env var with a `disk:` block (mount path
+>   `/opt/render/project/src/data`, 1 GB), and drop `DATABASE_URL`.
 
 ---
 
@@ -193,9 +223,11 @@ in `server.js` or the front-end has to change.
 ## Post-deploy checklist
 
 - [ ] `ADMIN_PASSWORD` set to something strong (not `weasley`).
-- [ ] Data directory is on a **persistent** disk/volume.
+- [ ] Durable storage configured: `DATABASE_URL` set to Postgres **or** the
+      `data/` directory on a persistent disk/volume.
 - [ ] Site loads over **HTTPS**.
-- [ ] `GET /healthz` returns `{"status":"ok"}` (Render uses this as its health check).
+- [ ] `GET /healthz` returns `{"status":"ok","backend":"postgres"}` (Render uses
+      this as its health check; confirm `backend` is what you intended).
 - [ ] You can log in at `/admin.html` and add a trip.
 - [ ] The new trip shows on the home page and the clock behaves.
 - [ ] A backup plan exists for `data/trips.json` (or you've moved to a DB).
